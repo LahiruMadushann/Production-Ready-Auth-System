@@ -1,11 +1,14 @@
 package com.authsystem.service;
 
 import com.authsystem.dto.UserResponse;
+import com.authsystem.entity.Role;
 import com.authsystem.entity.User;
 import com.authsystem.exception.UserNotFoundException;
 import com.authsystem.repository.UserRepository;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
+
+import java.util.stream.Collectors;
 
 @Service
 public class UserService {

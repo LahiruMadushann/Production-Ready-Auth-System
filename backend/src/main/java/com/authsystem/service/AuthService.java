@@ -3,18 +3,24 @@ package com.authsystem.service;
 import com.authsystem.dto.AuthResponse;
 import com.authsystem.dto.LoginRequest;
 import com.authsystem.dto.RegisterRequest;
+import com.authsystem.dto.UserResponse;
 import com.authsystem.entity.Role;
 import com.authsystem.entity.User;
 import com.authsystem.exception.DuplicateUserException;
+import com.authsystem.exception.UserNotFoundException;
 import com.authsystem.repository.RoleRepository;
 import com.authsystem.repository.UserRepository;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.HashSet;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 public class AuthService {
@@ -34,13 +40,18 @@ public class AuthService {
         this.authenticationManager = authenticationManager;
     }
 
+    @Transactional
     public AuthResponse register(RegisterRequest request) {
-        if (userRepository.existsByUsername(request.getUsername()) || userRepository.existsByEmail(request.getEmail())) {
-            throw new DuplicateUserException("Username or email already exists");
+        if (userRepository.existsByUsername(request.getUsername())) {
+            throw new DuplicateUserException("Username already exists");
         }
 
-        Role userRole = roleRepository.findByName("USER")
-                .orElseThrow(() -> new RuntimeException("Role not found"));
+        if (userRepository.existsByEmail(request.getEmail())) {
+            throw new DuplicateUserException("Email already exists");
+        }
+
+        Role userRole = roleRepository.findByName("ROLE_USER")
+                .orElseThrow(() -> new RuntimeException("Default role not found. Please contact administrator."));
 
         User user = User.builder()
                 .username(request.getUsername())
@@ -59,12 +70,18 @@ public class AuthService {
     }
 
     public AuthResponse login(LoginRequest request) {
-        authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(request.getUsername(), request.getPassword())
-        );
+        try {
+            authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(request.getUsername(), request.getPassword())
+            );
+        } catch (BadCredentialsException e) {
+            throw new BadCredentialsException("Invalid username or password");
+        } catch (AuthenticationException e) {
+            throw new RuntimeException("Authentication failed: " + e.getMessage());
+        }
 
         User user = userRepository.findByUsername(request.getUsername())
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new UserNotFoundException("User not found"));
 
         String jwt = jwtService.generateToken(user);
         AuthResponse response = new AuthResponse();
